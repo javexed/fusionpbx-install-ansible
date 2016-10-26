@@ -1,0 +1,30 @@
+---
+- hosts: webservers
+  become: yes
+
+  tasks:
+    - debug: msg='Install the web server'
+    - apt: name=nginx,php5,php5-cli,php5-fpm,php5-pgsql,php5-sqlite,php5-odbc,php5-curl,php5-imap,php5-mcrypt force=yes
+    - git: repo=git://github.com/fusionpbx/fusionpbx-install.sh.git dest=/usr/src/fusionpbx-install.sh clone=yes update=no
+    - synchronize: src=/usr/src/fusionpbx-install.sh/debian/resources/nginx/fusionpbx dest=/etc/nginx/sites-available/fusionpbx
+      delegate_to: "{{ inventory_hostname }}"
+      notify:
+      - restart nginx
+    - file: src=/etc/nginx/sites-available/fusionpbx dest=/etc/nginx/sites-enabled/fusionpbx state=link
+      notify:
+      - restart nginx
+    - debug: msg='If the next step fails, this is likely due to the snakeoil certs not being created. See the postgresql playbook for details.'
+    - file: src=/etc/ssl/private/ssl-cert-snakeoil.key dest=/etc/ssl/private/nginx.key state=link
+      notify:
+      - restart nginx
+    - file: src=/etc/ssl/certs/ssl-cert-snakeoil.pem dest=/etc/ssl/certs/nginx.crt state=link
+      notify:
+      - restart nginx
+    - file: path=/etc/nginx/sites-enabled/default state=absent
+      notify:
+      - restart nginx
+    - service: name=nginx state=started enabled=yes
+
+  handlers:
+    - name: restart nginx
+      service: name=nginx state=restarted

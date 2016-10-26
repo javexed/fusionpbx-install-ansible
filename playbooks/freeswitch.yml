@@ -1,0 +1,133 @@
+---
+- hosts: freeswitch
+  become: yes
+
+  tasks:
+    - debug: msg='Install Freeswitch'
+    - apt: name=curl,memcached,haveged force=yes
+    - apt_key: url=http://files.freeswitch.org/repo/deb/debian/freeswitch_archive_g0.pub state=present
+    - apt_repository: repo='deb http://files.freeswitch.org/repo/deb/freeswitch-1.6/ jessie main' state=present
+    - apt: name=gdb,ntp
+    - apt: name=freeswitch-meta-bare,freeswitch-conf-vanilla,freeswitch-mod-commands,freeswitch-meta-codecs,freeswitch-mod-console,freeswitch-mod-logfile,freeswitch-mod-distributor
+    - apt: name=freeswitch-lang-en,freeswitch-mod-say-en,freeswitch-sounds-en-us-callie
+    - apt: name=freeswitch-mod-enum,freeswitch-mod-cdr-csv,freeswitch-mod-event-socket,freeswitch-mod-sofia,freeswitch-mod-sofia-dbg,freeswitch-mod-loopback
+    - apt: name=freeswitch-mod-conference,freeswitch-mod-db,freeswitch-mod-dptools,freeswitch-mod-expr,freeswitch-mod-fifo,libyuv-dev,freeswitch-mod-httapi
+    - apt: name=freeswitch-mod-hash,freeswitch-mod-esl,freeswitch-mod-esf,freeswitch-mod-fsv,freeswitch-mod-valet-parking,freeswitch-mod-dialplan-xml,freeswitch-dbg
+    - apt: name=freeswitch-mod-sndfile,freeswitch-mod-native-file,freeswitch-mod-local-stream,freeswitch-mod-tone-stream,freeswitch-mod-lua,freeswitch-meta-mod-say
+    - apt: name=freeswitch-mod-xml-cdr,freeswitch-mod-verto,freeswitch-mod-callcenter,freeswitch-mod-rtc,freeswitch-mod-png,freeswitch-mod-json-cdr,freeswitch-mod-shout
+    - apt: name=freeswitch-mod-skypopen,freeswitch-mod-skypopen-dbg,freeswitch-mod-sms,freeswitch-mod-sms-dbg,freeswitch-mod-cidlookup,freeswitch-mod-memcache
+    - apt: name=freeswitch-mod-imagick,freeswitch-mod-tts-commandline,freeswitch-mod-directory,freeswitch-mod-flite
+
+    - name: Make sure that postgresql is started before starting freeswitch
+      replace: dest=/lib/systemd/system/freeswitch.service regexp='local-fs.target:' replace='postgresql.service:'
+      notify: restart freeswitch
+
+    - name: Check if the default music directory already exists. If it does, that means we'ave already done this.
+      stat: path=/usr/share/freeswitch/sounds/music/default
+      register: freeswitch_default_music_stat
+    - name: Only install the default music package if there is no music already there
+      apt: name=freeswitch-music-default
+      when: freeswitch_default_music_stat.stat.exists == False
+    - debug: "msg='Remove the music package to protect music on hold from package updates'"
+    - file: path=/usr/share/freeswitch/sounds/temp state=directory
+      when: freeswitch_default_music_stat.stat.exists == False
+    - name: Backup the music files
+      shell:  mv /usr/share/freeswitch/sounds/music/*000 /usr/share/freeswitch/sounds/temp
+      when: freeswitch_default_music_stat.stat.exists == False
+    - name: Remove the music package
+      apt: name=freeswitch-music-default state=absent force=yes
+      when: freeswitch_default_music_stat.stat.exists == False
+    - file: path=/usr/share/freeswitch/sounds/music/default state=directory
+      when: freeswitch_default_music_stat.stat.exists == False
+    - name: Restore the music files
+      shell:  mv /usr/share/freeswitch/sounds/temp/* /usr/share/freeswitch/sounds/music/default
+      when: freeswitch_default_music_stat.stat.exists == False
+    - file: path=/usr/share/freeswitch/sounds/temp state=absent
+      when: freeswitch_default_music_stat.stat.exists == False
+# =====================================
+# Section for copying the config files over
+# =====================================
+    - name: Get the fusionpbx repo in order to get the freeswitch config files
+      git: repo=git://github.com/fusionpbx/fusionpbx.git  dest=/usr/src/fusionpbx clone=yes update=no
+    - name: Check if the directory /etc/freeswith.orig exists
+      stat: path=/etc/freeswitch.orig
+      register: freeswitch_conf_stat
+    - name: Move the config files if they haven't already been backed up.
+      command: mv /etc/freeswitch /etc/freeswitch.orig
+      when: freeswitch_conf_stat.stat.exists == False
+      notify: restart freeswitch
+    - file: path=/etc/freeswitch state=directory
+      when: freeswitch_conf_stat.stat.exists == False
+    - name: Copy the config files over the freeswitch conf directory
+      synchronize:  src=/usr/src/fusionpbx/resources/templates/conf/ dest=/etc/freeswitch
+      delegate_to: "{{ inventory_hostname }}"
+      notify: restart freeswitch
+      when: freeswitch_conf_stat.stat.exists == False
+    - name: Modify the vars file to use the ip address of eth1 rather than eth0
+      lineinfile: dest=/etc/freeswitch/vars.xml regexp="addr show eth1" insertbefore='domain_name=' line='<X-PRE-PROCESS cmd=\"exec-set\" data=\"local_ip_v4=ip addr show eth1 | awk \'/inet /{print $2}\' | head -n 1 | cut -d \'/\' -f 1\"/>'
+      notify: restart freeswitch
+    - replace: dest=/etc/freeswitch/autoload_configs/xml_cdr.conf.xml regexp='{v_http_protocol}' replace={{ v_http_protocol }}
+    - replace: dest=/etc/freeswitch/autoload_configs/xml_cdr.conf.xml regexp='{domain_name}' replace={{ domain_name }}
+    - replace: dest=/etc/freeswitch/autoload_configs/xml_cdr.conf.xml regexp='{v_project_path}' replace={{ v_project_path }}
+# NOTE: I don't think the following two actually do anything as the source file seems to have the config already
+    - replace: dest=/etc/freeswitch/autoload_configs/switch.conf.xml regexp='{v_mailer_app}' replace={{ v_project_path }}{{ v_mailer_app }}
+    - replace: dest=/etc/freeswitch/autoload_configs/switch.conf.xml regexp='{v_mailer_app_args}' replace={{ v_project_path }}{{ v_mailer_app_args }}
+# =====================================
+# Section for modifying the package permissions
+# =====================================
+    - debug: msg='Default permissions'
+    - file: path=/etc/freeswitch owner=www-data group=www-data recurse=yes
+      notify: restart freeswitch
+    - file: path=/var/lib/freeswitch owner=www-data group=www-data recurse=yes
+      notify: restart freeswitch
+    - file: path=/usr/share/freeswitch owner=www-data group=www-data recurse=yes
+      notify: restart freeswitch
+    - file: path=/var/log/freeswitch owner=www-data group=www-data recurse=yes
+      notify: restart freeswitch
+    - file: path=/var/run/freeswitch owner=www-data group=www-data recurse=yes
+      notify: restart freeswitch
+# =====================================
+# Section for modifying the freeswitch startup
+# =====================================
+    - name: Backup the freeswitch service file
+      shell: cp  /lib/systemd/system/freeswitch.service /lib/systemd/system/freeswitch.service.orig
+      args:
+        creates: /lib/systemd/system/freeswitch.service.orig
+    - apt: name=freeswitch-systemd state=absent force=yes
+    - name: Restore the file
+      shell: cp  /lib/systemd/system/freeswitch.service.orig /lib/systemd/system/freeswitch.service
+      args:
+        creates: /lib/systemd/system/freeswitch.service
+    - replace: dest=/lib/systemd/system/freeswitch.service regexp='-u freeswitch -g freeswitch' replace='-u www-data -g www-data'
+      notify: restart daemon_reload
+    - lineinfile: dest=/lib/systemd/system/freeswitch.service regexp='ExecStartPre=/bin/mkdir' insertbefore='ExecStart=/usr/bin/freeswitch -u' line='ExecStartPre=/bin/mkdir -p /var/run/freeswitch/'
+      notify: restart daemon_reload
+    - lineinfile: dest=/lib/systemd/system/freeswitch.service regexp='ExecStartPre=/bin/chown' insertbefore='ExecStart=/usr/bin/freeswitch -u' line='ExecStartPre=/bin/chown -R www-data:www-data /var/run/freeswitch/'
+      notify: restart daemon_reload
+    - blockinfile:
+        dest: /etc/default/freeswitch
+        create: yes
+        block: |
+          # /etc/default/freeswitch
+          FS_USER="www-data"
+          FS_GROUP="www-data"
+          DAEMON_OPTS="-nonat -ncwait -u www-data -g www-data -run /var/run/freeswitch"
+      notify: restart daemon_reload
+    - service: name=freeswitch enabled=yes
+
+  vars:
+    v_http_protocol: 'http'
+    domain_name: "127.0.0.1"
+    v_project_path: '/var/www/fusionpbx'
+    v_mailer_app: '/secure/v_mailto.php'
+    v_mailer_app_args: '-t'
+
+  handlers:
+    - name: restart daemon_reload
+      command: systemctl unmask freeswitch.service
+      notify: restart daemon_reload step 2
+    - name: restart daemon_reload step 2
+      command: systemctl daemon-reload
+      notify: restart freeswitch
+    - name: restart freeswitch
+      service: name=freeswitch state=restarted

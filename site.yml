@@ -1,0 +1,12 @@
+---
+- include: common/debian.yml
+# NOTE: Install postgres before freeswitch as it depends on the snakeoil certs
+- include: playbooks/postgresql.yml
+- include: playbooks/iptables.yml
+- include: playbooks/nginx.yml
+- include: playbooks/php.yml
+- include: playbooks/fail2ban.yml
+- include: playbooks/freeswitch.yml
+- include: playbooks/fusionpbx.yml
+
+- include: playbooks/user_message.yml

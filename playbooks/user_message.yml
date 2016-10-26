@@ -1,0 +1,35 @@
+---
+- hosts: dbservers
+  become: yes
+  become_user: postgres
+  gather_facts: no
+
+  tasks:
+    - command: psql -d fusionpbx -c "select count(*) from information_schema.tables where table_schema = 'public';"
+      register: install_status
+# ==========
+# This is required for postgres to listen to a different interface so that freeswitch can talk to it.
+# ==========
+    - name: Change the config from local loopback (127.0.0.1) to localhost
+      replace: dest=/usr/share/freeswitch/scripts/resources/config.lua regexp='pgsql://hostaddr=127.0.0.1' replace='pgsql://host=localhost'
+      when: install_status.stdout.find('95') != -1
+      notify: restart freeswitch
+      become_user: root
+# ==========
+# Print this out to instruct user to complete install using web interface.
+# ==========
+    - debug: msg="Postgresql"
+      when: install_status.stdout.find('95') == -1
+    - debug: "msg='  Database name: {{ db1name }} '"
+      when: install_status.stdout.find('95') == -1
+    - debug: "msg='  Database username: {{ db1user }}'"
+      when: install_status.stdout.find('95') == -1
+    - debug: "msg='  Database password: {{ dbpassword }}'"
+      when: install_status.stdout.find('95') == -1
+    - debug: "msg='Complete the install by going to the IP address of this server: https://{{ inventory_hostname }}'"
+      when: install_status.stdout.find('95') == -1
+
+  handlers:
+    - name: restart freeswitch
+      become_user: root
+      service: name=freeswitch state=restarted

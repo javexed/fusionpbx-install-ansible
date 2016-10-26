@@ -1,0 +1,17 @@
+---
+- hosts: webservers
+  become: yes
+
+  tasks:
+    - debug: msg='Configure PHP'
+    - replace: dest=/etc/php5/fpm/php.ini regexp='post_max_size = .*' replace='post_max_size = 80M'
+      notify:
+      - restart php
+    - replace: dest=/etc/php5/fpm/php.ini regexp='upload_max_filesize = .*' replace='upload_max_filesize = 80M'
+      notify:
+      - restart php
+    - service: name=php5-fpm state=started enabled=yes
+  handlers:
+
+    - name: restart php
+      service: name=php5-fpm state=restarted

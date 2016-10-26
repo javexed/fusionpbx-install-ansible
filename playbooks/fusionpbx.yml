@@ -1,0 +1,11 @@
+---
+- hosts: webservers
+  become: yes
+  tasks:
+  - debug: msg='Install fusionpbx'
+  - apt: name=vim,git,dbus,haveged,ssl-cert force=yes
+  - apt: name=ghostscript,libtiff5-dev,libtiff-tools force=yes
+  - file: path=/var/www/fusionpbx state=directory mode=0755
+  - git: repo=git://github.com/fusionpbx/fusionpbx.git dest=/var/www/fusionpbx clone=yes update=no
+  - file: path=/var/www/fusionpbx owner=www-data group=www-data recurse=yes
+  - file: path=/var/www/fusionpbx/secure state=directory mode=0755 recurse=yes

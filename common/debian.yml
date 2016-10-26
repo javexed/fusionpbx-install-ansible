@@ -1,0 +1,17 @@
+---
+- hosts: debian
+  become: yes
+
+  tasks:
+    - name: update apt packages
+      apt: update_cache=yes cache_valid_time=3600
+    - name: Install git
+      apt: name=git
+
+    - name: validate OS
+      fail: msg="Intall is only supported on Debian"
+      when: ansible_distribution != 'Debian'
+
+    - name: Validate Architecture
+      fail: msg="Install is only support on x86_64"
+      when: ansible_architecture != 'x86_64'

@@ -1,0 +1,25 @@
+[debian]
+192.168.29.2
+#192.168.29.3
+
+[webservers]
+192.168.29.2
+
+[freeswitch]
+192.168.29.2
+
+[dbservers]
+192.168.29.2
+
+[all:vars]
+ansible_ssh_user=vagrant
+ansible_ssh_private_key_file=~/.vagrant.d/insecure_private_key
+
+dbtype=pgsql
+dbhost=localhost
+dbport=5432
+db1name=fusionpbx
+db1user=fusionpbx
+db2name=freeswitch
+db2user=freeswitch
+dbpassword="{{ lookup('password', '/tmp/passwordfile') }}"

@@ -1,0 +1,34 @@
+---
+- hosts: dbservers
+  become: yes
+
+  tasks:
+    - debug: msg='Install PostgreSQL'
+    - apt: force=yes name=postgresql,libpq-dev,python-psycopg2
+    - name: Regenerate the snakeoil certs and key
+      command: openssl req -x509 -nodes -subj "/CN={{ ansible_eth1.ipv4.address }}" -days 3650 -newkey rsa:2048 -keyout /etc/ssl/private/ssl-cert-snakeoil.key -out /etc/ssl/certs/ssl-cert-snakeoil.pem
+      args:
+        creates: /etc/ssl/certs/ssl-cert-snakeoil.pem
+      notify: restart postgresql
+    - file: path=/etc/ssl/certs/ssl-cert-snakeoil.pem owner=root group=ssl-cert mode=0640
+      notify: restart postgresql
+    - file: path=/etc/ssl/private/ssl-cert-snakeoil.key owner=root group=ssl-cert mode=0640
+      notify: restart postgresql
+    - service: name=postgresql state=started enabled=yes
+  handlers:
+    - name: restart postgresql
+      service: name=postgresql state=restarted
+    # waiting for ansible 2.2
+    #- systemd: name=postgresql state-restarted daemon_reload: yes
+
+- hosts: dbservers
+  become: yes
+  become_user: postgres
+  gather_facts: no
+
+  tasks:
+    - postgresql_db: name={{ db1name }}
+    - postgresql_db: name={{ db2name }}
+    - postgresql_user: db={{ db1name }} name={{ db1user }} password={{ dbpassword }} priv=ALL
+    - postgresql_user: db={{ db1name }} name={{ db2user }} password={{ dbpassword }} priv=ALL
+    - postgresql_user: db={{ db2name }} name={{ db2user }} password={{ dbpassword }} priv=ALL
