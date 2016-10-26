@@ -43,8 +43,8 @@ cat "deb http://httpredir.debian.org/debian jessie-backports main" >> /etc/apt/s
 * Next we need to install ansible
 ````
 apt-get update && apt-get -y -t jessie-backports install ansible
-git clone {{ this project }}
-cd {{ this project }}
+git clone https://github.com/javexed/fusionpbx-install-ansible
+cd fusionpbx-install-ansible
 ansible-playbook -i inventory/standalone site.yml
 ````
 * Similar to above, when it is completed, there will be instructions on what to do next. It will say the website address of your new install as well as the username and password of the database.
