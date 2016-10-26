@@ -11,10 +11,12 @@ There are two options for installing Ansible.
 ## Vagrant install
 ### Requirements
 * Vagrant
+* git
 
 ### Instructions
-* First bring up the environment. From the command line:
+* First, clone the repository and bring up the environment. From the command line:
 ````
+git clone https://github.com/javexed/fusionpbx-install-ansible
 vagrant up
 ````
 * When it is completed, there will be instructions on what to do next. It will say the website address of your new install as well as the username and password of the database.
